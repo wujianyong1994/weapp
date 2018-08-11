@@ -1,0 +1,290 @@
+<style lang="less">
+  .userinfo {
+    display: flex;
+    // flex-direction: column;
+    align-items: center;
+
+  }
+
+  .userinfo-avatar {
+    width: 80rpx;
+    height: 80rpx;
+    border-radius: 50%;
+  }
+  .userinfohead {
+    display: flex;
+     
+  }
+.navbar {
+    .page,
+    .page__bd{
+        height: 100%;
+    }
+    .page__bd{
+        padding-bottom: 0;
+    }
+    .weui-tab__content{
+        padding-top: 10px;
+        text-align: unset;
+    }
+}
+
+  .userinfo-nickname {
+    color: #aaa;
+  }
+</style>
+<template>
+<view class="navbar page">
+  <view class="page__bd">
+    <view class="weui-tab">
+      <view class="weui-navbar">
+          <view wx:for="{{tabs}}" wx:key="*this" id="{{index}}" class="weui-navbar__item {{activeIndex == index ? 'weui-bar__item_on' : ''}}" @tap="tabClick">
+              <view class="weui-navbar__title">{{item}}</view>
+          </view>
+          <view class="weui-navbar__slider" style="left: {{sliderLeft}}px; transform: translateX({{sliderOffset}}px); -webkit-transform: translateX({{sliderOffset}}px);"></view>
+      </view>
+      <view class="weui-tab__panel">
+          <view class="weui-tab__content" hidden="{{activeIndex != 0}}">
+            <view class="userinfohead" >
+            <view class="userinfo">
+              <image class="userinfo-avatar" src="{{ userInfo.avatarUrl }}" background-size="cover"/>
+              <view class="userinfo-nickname">{{ userInfo.nickName }}</view>
+            </view>
+            <view style="margin-left:10px">
+              <button class="weui-btn" hidden="{{hiddenLogin}}" type="primary" size="mini" open-type="getUserInfo" bindgetuserinfo="bindGetUserInfo" >登陆</button> 
+            </view>
+            </view>
+            <view class="page__bd">
+              <view class="weui-cells weui-cells_after-title">
+                  <view wx:for="{{listGroup}}" wx:key="{{index}}" id="{{index}}" class="weui-cell">
+                    <view class="weui-cell__bd">{{item.name}}</view>
+                    <view class="weui-cell__ft">
+                      <button class="weui-btn" type="primary" size="mini" @tap="detail({{item.id}})" >详情</button> 
+                    </view>
+                  </view>
+              </view>
+            </view>
+          </view>
+          <view class="weui-tab__content" hidden="{{activeIndex != 1}}">
+            <view class="weui-cell weui-cell_input" style="background-color:#FFFFFF">
+                    <view class="weui-cell__hd">
+                        <view class="weui-label">通讯组名称</view>
+                    </view>
+                    <view class="weui-cell__bd">
+                        <input class="weui-input" @input="bindGroupName" value="{{groupName}}"  placeholder="请输入通讯组名称" />
+                    </view>
+            </view>
+            <button class="weui-btn" style="margin-left:5px;margin-right:5px;" type="primary" @tap="createGroup">新建</button>
+          </view>
+      </view>
+      <zan-dialog id="zan-dialog-test"></zan-dialog>
+    </view>
+  </view>
+</view>
+    
+</template>
+
+<script>
+  import wepy from 'wepy'
+  import Panel from '@/components/panel' // alias example
+  import List from '../components/list' // aliasFields example
+  import moduleA from 'module-a' // aliasFields ignore module example
+  import Toast from 'wepy-com-toast'
+  import testMixin from '../mixins/test'
+  import moment from 'moment'
+  // import * as a from  'zanui-weapp'
+  const Dialog = require('../components/dialog/dialog');
+  console.log('moduleA ignored: ', moduleA) // => moduleA ignored: {}
+  const sliderWidth = 96; // 需要设置slider的宽度，用于计算中间位置
+
+  export default class Index extends wepy.page {
+    config = {
+      navigationBarTitleText: '通讯录',
+      usingComponents:{
+        "zan-dialog": "../components/dialog/index"
+      }
+    }
+    components = {
+      toast: Toast
+    }
+
+    mixins = [testMixin]
+
+    data = {
+      mynum: 20,
+      userInfo: {
+        nickName: '加载中...'
+      },
+      isGetUser: false,
+      tabs: ['我的通讯组', '新建通讯组'],
+      activeIndex: 0,
+      sliderOffset: 0,
+      sliderLeft: 0,
+      groupName:'',
+      listGroup:[],
+      pageIndex:1,
+      totalPage:1,
+      hiddenLogin:false,
+      loadingGroups:false
+    }
+
+    methods = {
+      handleViewTap() {
+        console.log('click头像')
+      },
+      bindGetUserInfo(e) {
+        console.log(wx.getStorageSync('sessionid'))
+        let self = this
+        this.$parent.getUserInfo(function (userInfo) {
+          if (userInfo) {
+            self.userInfo = userInfo
+            self.hiddenLogin = true;
+            self.isGetUser = true;
+            self.listGroup = [];
+            self.pageIndex = 1;
+            self.getData(1)
+          }
+          
+        self.$apply()
+        })
+      },
+      async tabClick (e) {
+        this.sliderOffset = e.currentTarget.offsetLeft;
+        this.activeIndex = e.currentTarget.id;
+        if (Number(e.currentTarget.id) === 0 ) {
+          if (!this.loadingGroups) {
+            this.loadingGroups = true;
+            this.listGroup = [];
+            this.pageIndex = 1;
+            await this.getData(1);
+            this.loadingGroups = false;
+          }
+        }
+      },
+      async createGroup(){
+        // this.groupName = ''; return;
+        if (!this.groupName) return;
+        let self = this
+        await wepy.request({
+          url: 'addGroup',
+          method:'POST',
+          data:{name:this.groupName},
+          success:(rtn)=>{
+            const data = rtn.data
+            if (data.success) {
+              self.groupName = ""
+              wx.showToast({
+                    title: '已完成',
+                    icon: 'success',
+                    duration: 1500
+              });
+              self.$apply()
+            }
+          }
+        })
+      },
+      bindGroupName(e){
+        this.groupName = e.detail.value
+      },
+      detail(e){
+        console.log(e);
+        wepy.navigateTo({
+          url:'contactDetail?id='+e
+        })
+      }
+    }
+
+    async getData(pageIndex) {
+        await wepy.request({
+          url: 'listGroup?pageIndex='+pageIndex,
+          method:'GET',
+          success:(rtn)=>{
+            const data = rtn.data
+            if (data.success) {
+              this.listGroup = this.listGroup.concat(data.data);
+              this.totalPage = data.totalPage
+              this.$apply()
+            }
+          }
+        })
+    }
+
+    async onLoad(option) {
+      let res = await wepy.getSystemInfoSync();
+      this.sliderLeft = (res.windowWidth / this.tabs.length - sliderWidth) / 2;
+      this.sliderOffset = res.windowWidth / this.tabs.length * this.activeIndex;
+      const groupId = option.groupId
+      
+      let self = this
+      await this.$parent.getUserInfo(function (userInfo) {
+        console.log('haha')
+        if (userInfo) {
+          self.userInfo = userInfo
+          self.hiddenLogin = true;
+          self.isGetUser = true;
+          console.log(groupId);
+          if (groupId) {
+            wepy.navigateTo({
+              url:'contactDetail?id='+groupId
+            })
+          }
+          self.getData(1)
+        }else {
+          if (groupId) {
+          Dialog({
+            title: '登陆',
+            message: '登陆后进入通讯组',
+            selector: '#zan-dialog-test',
+            buttons:[{
+              text: '登陆',
+              type: 'userInfo',
+              openType:'getUserInfo'
+            },{
+              text: '取消',
+              type: 'cancel'
+            }]
+          }).then(({ type, hasOpenDataPromise, openDataPromise }) => {
+            if (hasOpenDataPromise) {
+              openDataPromise.then((data) => {
+                self.$parent.getUserInfo(function (userInfo) {
+                  if (userInfo) {
+                    self.userInfo = userInfo
+                    self.hiddenLogin = true;
+                    self.isGetUser = true;
+                    if (groupId) {
+                      wepy.navigateTo({
+                        url:'contactDetail?id='+groupId
+                      })
+                    }
+                    self.getData(1)
+                  }
+                  self.$apply()
+                });
+              }).catch((data) => {
+                console.log('获取信息失败', data);
+              });
+            }
+          })
+          }
+        }
+        self.$apply()
+      });
+      console.log(this.isGetUser);
+      
+    }
+    onReachBottom(){
+      if (Number(this.activeIndex)===0) {
+        if (this.totalPage > this.pageIndex) {
+          this.pageIndex++;
+          this.getData(this.pageIndex);
+        }
+      }
+    }
+    onShow(){
+      if (!this.isGetUser) return;
+      this.listGroup = [];
+      this.pageIndex = 1;
+      this.getData(1);
+    }
+  }
+</script>

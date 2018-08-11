@@ -1,0 +1,182 @@
+<template>
+<view class="page">
+    <view class="page__bd">
+        <view class="weui-cells__title">{{groupName}}</view>
+        <view class="weui-cells weui-cells_after-title">
+            <view wx:for="{{groups}}" wx:key="{{index}}" id="{{index}}" class="weui-cell">
+                <view class="weui-cell__bd">{{item.name}}</view>
+                <view class="weui-cell__ft" @tap="call({{item.mobile}})"><text>{{item.mobile ? item.mobile : '' }}</text></view>
+                <view class="weui-cell__ft" style="padding-left:5px;margin-padding:5px"><button class="weui-btn" type="normal" size="mini" @tap="option({{index}})" >操作</button></view>
+            </view>
+            
+        </view>
+        <button class="weui-btn" style="margin-left:5px;margin-right:5px;" @tap="back" type="normal" >返回</button>
+        <button wx:if="{{showJoin}}" class="weui-btn" style="margin-left:5px;margin-right:5px;" type="primary" @tap="joinGroup">加入该通讯组</button>
+        <button wx:if="{{!showJoin}}" class="weui-btn" style="margin-left:5px;margin-right:5px;" type="primary" @tap="exitGroup">退出该通讯组</button>
+        <button class="weui-btn" style="margin-left:5px;margin-right:5px;" type="primary" open-type="share">分享</button>
+    </view>
+    <zan-dialog id="exitGroup"></zan-dialog>
+</view>
+</template>
+
+<script>
+import wepy from 'wepy'
+const Dialog = require('../components/dialog/dialog');
+export default class Detail extends wepy.page {
+    config = {
+      navigationBarTitleText: '通讯组详情',
+      usingComponents:{
+        "zan-dialog": "../components/dialog/index"
+      }
+    }
+    data = {
+        groups:[],
+        groupName:'',
+        groupId:'',
+        showJoin:false,
+        isAdmin:false
+    }
+    methods = {
+        back(){
+            wx.navigateBack()
+        },
+        async joinGroup(){
+            
+            await wepy.request({
+                url: 'joinGroup',
+                method:'POST',
+                data:{groupId:this.groupId},
+                success:(rtn)=>{
+                    const data = rtn.data
+                    if (data.success) {
+                        wx.showToast({
+                            title: '已成功加入',
+                            icon: 'success',
+                            duration: 1500
+                        });
+                        this.getData()
+                    }
+                }
+            })
+        },
+        call(num){
+            wx.makePhoneCall({
+                phoneNumber: num,
+                success: function(res) {
+                    // success
+                }
+            })
+        },
+        exitGroup(){
+            let self = this
+            Dialog({
+                title: '退出通讯组',
+                message: '确定退出该通讯组吗？',
+                selector: '#exitGroup',
+                showCancelButton: true
+            }).then((res) => {
+                // 退出通讯组
+                wepy.request({
+                    url: 'exitGroup?groupId='+this.groupId,
+                    method:'GET',
+                    success:(rtn)=>{
+                        const data = rtn.data
+                        if (data.success) {
+                            wx.showToast({
+                                title: '已退出',
+                                icon: 'success',
+                                duration: 1500
+                            });
+                            wx.navigateBack()
+                        } else {
+                        }
+                    }
+                })
+            }).catch((reject) => {
+                console.log(reject)
+            })
+        },
+        option(index){
+            let itemList = [];
+            if (this.isAdmin) {
+                itemList = ['复制号码', '踢出成员:'+this.groups[index].name];
+            } else {
+                itemList = ['复制号码']
+            }
+            let self = this
+            wx.showActionSheet({
+                itemList: itemList,
+                success: function(res) {
+                    if (res.tapIndex===0){
+                        wx.setClipboardData({data:self.groups[index].mobile})
+                    } else if (res.tapIndex===1) {
+                        console.log(self);
+                        self.methods.kickUser.call(self,self.groups[index].ID);
+                    }
+                },
+                fail: function(res) {
+                    console.log(res.errMsg)
+                }
+            })
+        },
+        kickUser(userId){
+            console.log(userId);
+            const groupId = this.groupId
+            wepy.request({
+                url: 'kickUser',
+                method:'POST',
+                data:{userId,groupId},
+                success:(rtn)=>{
+                    const data = rtn.data
+                    if (data.success) {
+                        wx.showToast({
+                                title: '已踢出',
+                                icon: 'success',
+                                duration: 1500
+                        });
+                        this.getData();
+                    } else {
+                        wx.showToast({
+                                title: data.msg,
+                                icon: 'fail',
+                                duration: 1500
+                        });
+                    }
+                }
+                })
+            }
+    }
+    async onLoad (option){
+        if (!option.id) return;
+        this.groupId = option.id
+        this.getData()
+    }
+    async getData(){
+        await wepy.request({
+          url: 'listGroupDetail?groupId='+this.groupId,
+          method:'GET',
+          success:(rtn)=>{
+            const data = rtn.data
+            if (data.success) {
+                this.groups = data.data;
+                this.groupName = data.groupName;
+                this.isAdmin = data.isAdmin;
+                if (!data.isInGroup) {
+                    this.showJoin = true;
+                } else {
+                    this.showJoin = false;
+                }
+                this.$apply()
+            }
+          }
+        })
+    }
+    onShareAppMessage(res) {
+        console.log(res);
+        return {
+            title: '邀请您加入 '+this.groupName,
+            path: `/pages/index?groupId=${this.groupId}`
+        }
+    }
+}
+</script>
